@@ -36,7 +36,6 @@ export async function detectGPUCapability(): Promise<GPUCapabilityInfo> {
   if (typeof navigator !== 'undefined' && 'gpu' in navigator && navigator.gpu) {
     try {
       // Use 'any' type to handle WebGPU API (avoid type definition conflicts)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const gpu = (navigator as any).gpu;
       const adapter = await gpu.requestAdapter();
       if (adapter) {
@@ -58,7 +57,6 @@ export async function detectGPUCapability(): Promise<GPUCapabilityInfo> {
       console.warn('[WebGPU] Failed to request adapter:', error);
     }
   }
-
 
   // 2. Detect WebGL2 support
   try {
