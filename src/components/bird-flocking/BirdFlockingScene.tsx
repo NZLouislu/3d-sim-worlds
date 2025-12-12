@@ -3,21 +3,33 @@
 import { Canvas } from "@react-three/fiber";
 import { EffectComposer, Bloom, DepthOfField, Vignette } from "@react-three/postprocessing";
 import { useControls, button } from "leva";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useCallback } from "react";
 import Flock from "./Flock";
 import NatureEnvironment from "./NatureEnvironment";
 import CameraController from "./CameraController";
 import { useBirdSimStore } from "@/lib/bird-flocking/store";
+import { WebGPUCanvas } from "@/lib/webgpu/WebGPUCanvas";
+import { FPSMonitor, PerformanceHUD } from "@/lib/webgpu/PerformanceMonitor";
+import { useRendererStore } from "@/lib/webgpu/store";
+import { GPUCapabilityInfo } from "@/lib/webgpu";
 
 export default function BirdFlockingScene() {
   const { setCameraMode, cameraMode } = useBirdSimStore();
+  const { setCapability, forceWebGL, capability } = useRendererStore();
 
   useEffect(() => {
     console.log('[Camera Mode State] Changed to:', cameraMode);
   }, [cameraMode]);
 
+  // Dynamically adjust max bird count based on renderer capability
+  const getMaxBirdCount = () => {
+    if (capability?.renderer === 'webgpu') return 2000;
+    if (capability?.renderer === 'webgl2') return 1000;
+    return 500;
+  };
+
   const config = useControls("Flocking Parameters", {
-    count: { value: 200, min: 10, max: 1000, step: 10 },
+    count: { value: 200, min: 10, max: getMaxBirdCount(), step: 10 },
     separationWeight: { value: 3.0, min: 0, max: 5 },
     alignmentWeight: { value: 2.0, min: 0, max: 5 },
     cohesionWeight: { value: 1.5, min: 0, max: 5 },
@@ -60,9 +72,19 @@ export default function BirdFlockingScene() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [setCameraMode]);
 
+  const handleRendererInfo = useCallback((info: GPUCapabilityInfo) => {
+    setCapability(info);
+    console.log('[BirdFlockingScene] Renderer initialized:', info.renderer, info.reason);
+  }, [setCapability]);
+
   return (
     <div className="w-full h-[calc(100vh-64px)] relative bg-black">
-      <Canvas shadows camera={{ position: [0, 20, 50], fov: 60 }} dpr={[1, 2]}>
+      <WebGPUCanvas 
+        shadows 
+        camera={{ position: [0, 20, 50], fov: 60 }}
+        forceWebGL={forceWebGL}
+        onRendererInfo={handleRendererInfo}
+      >
         <Suspense fallback={null}>
           <NatureEnvironment />
           <Flock count={config.count} config={config} />
@@ -73,8 +95,14 @@ export default function BirdFlockingScene() {
             <Bloom luminanceThreshold={1.2} luminanceSmoothing={0.5} height={300} intensity={0.2} />
             <Vignette eskil={false} offset={0.1} darkness={0.4} />
           </EffectComposer>
+          
+          {/* Performance Monitor */}
+          <FPSMonitor />
         </Suspense>
-      </Canvas>
+      </WebGPUCanvas>
+      
+      {/* Performance HUD */}
+      <PerformanceHUD position="bottom-right" />
       
       {/* Overlay UI */}
       <div className="absolute top-6 left-6 text-white pointer-events-none z-10 select-none">

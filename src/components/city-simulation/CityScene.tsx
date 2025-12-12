@@ -3,9 +3,13 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Environment, Sky } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
-import { useMemo, Suspense, useState, useEffect } from "react";
+import { useMemo, Suspense, useState, useEffect, useCallback } from "react";
 import { generateCity, CityData } from "@/lib/city-simulation/cityGenerator";
 import { TrafficSystem } from "@/lib/city-simulation/trafficSystem";
+import { WebGPUCanvas } from "@/lib/webgpu/WebGPUCanvas";
+import { FPSMonitor, PerformanceHUD } from "@/lib/webgpu/PerformanceMonitor";
+import { useRendererStore } from "@/lib/webgpu/store";
+import { GPUCapabilityInfo } from "@/lib/webgpu";
 import Buildings from "./Buildings";
 import Streets from "./Streets";
 import Vehicles from "./Vehicles";
@@ -29,6 +33,7 @@ function CitySimulationLoop({ system }: { system: TrafficSystem }) {
 
 export default function CityScene() {
   const [cityData, setCityData] = useState<CityData | null>(null);
+  const { setCapability, forceWebGL } = useRendererStore();
 
   useEffect(() => {
     setCityData(generateCity(CITY_CONFIG));
@@ -41,11 +46,21 @@ export default function CityScene() {
 
   const cellSize = CITY_CONFIG.blockSize + CITY_CONFIG.streetWidth;
 
+  const handleRendererInfo = useCallback((info: GPUCapabilityInfo) => {
+    setCapability(info);
+    console.log('[CityScene] Renderer initialized:', info.renderer, info.reason);
+  }, [setCapability]);
+
   if (!cityData || !trafficSystem) return null;
 
   return (
     <div className="w-full h-[calc(100vh-64px)] relative bg-gray-900">
-      <Canvas shadows camera={{ position: [50, 50, 50], fov: 45 }} dpr={[1, 2]}>
+      <WebGPUCanvas 
+        shadows 
+        camera={{ position: [50, 50, 50], fov: 45 }} 
+        forceWebGL={forceWebGL}
+        onRendererInfo={handleRendererInfo}
+      >
         <Suspense fallback={null}>
           <color attach="background" args={['#111']} />
           <fog attach="fog" args={['#111', 50, 200]} />
@@ -93,13 +108,20 @@ export default function CityScene() {
             </mesh>
           </group>
 
+
           <OrbitControls maxPolarAngle={Math.PI / 2 - 0.1} />
           
           <EffectComposer>
             <Bloom luminanceThreshold={1.0} intensity={0.4} />
           </EffectComposer>
+          
+          {/* Performance Monitor */}
+          <FPSMonitor />
         </Suspense>
-      </Canvas>
+      </WebGPUCanvas>
+      
+      {/* Performance HUD */}
+      <PerformanceHUD position="bottom-right" />
       
       <div className="absolute top-6 left-6 text-white pointer-events-none z-10">
         <h1 className="text-4xl font-bold drop-shadow-lg mb-2 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
