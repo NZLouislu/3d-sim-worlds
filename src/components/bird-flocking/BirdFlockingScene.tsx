@@ -2,7 +2,7 @@
 
 import { Canvas } from "@react-three/fiber";
 import { EffectComposer, Bloom, DepthOfField, Vignette } from "@react-three/postprocessing";
-import { useControls, button } from "leva";
+import { useControls, button, Leva } from "leva";
 import { Suspense, useEffect, useCallback } from "react";
 import Flock from "./Flock";
 import NatureEnvironment from "./NatureEnvironment";
@@ -105,20 +105,28 @@ export default function BirdFlockingScene() {
       <PerformanceHUD position="bottom-right" />
       
       {/* Overlay UI */}
-      <div className="absolute top-6 left-6 text-white pointer-events-none z-10 select-none">
-        <h1 className="text-4xl font-bold drop-shadow-lg mb-2 bg-clip-text text-transparent bg-gradient-to-r from-amber-300 to-orange-500">
-          Bird Flocking
-        </h1>
-        <div className="bg-black/30 backdrop-blur-sm p-4 rounded-lg border border-white/10">
-          <p className="text-sm font-mono text-amber-100">
-            Count: <span className="font-bold">{config.count}</span>
-          </p>
-          <p className="text-sm font-mono text-amber-100">
-            Mode: <span className="font-bold uppercase">{cameraMode}</span>
-          </p>
-          <p className="text-xs text-white/50 mt-2">
-            Press &apos;V&apos; to switch view
-          </p>
+      {/* Overlay UI */}
+      <div className="absolute top-6 left-6 z-10 flex flex-col gap-4 max-h-[calc(100%-3rem)] pointer-events-none">
+        <div className="text-white select-none">
+          <h1 className="text-4xl font-bold drop-shadow-lg mb-2 bg-clip-text text-transparent bg-gradient-to-r from-amber-300 to-orange-500">
+            Bird Flocking
+          </h1>
+          <div className="bg-black/30 backdrop-blur-sm p-4 rounded-lg border border-white/10">
+            <p className="text-sm font-mono text-amber-100">
+              Count: <span className="font-bold">{config.count}</span>
+            </p>
+            <p className="text-sm font-mono text-amber-100">
+              Mode: <span className="font-bold uppercase">{cameraMode}</span>
+            </p>
+            <p className="text-xs text-white/50 mt-2">
+              Press &apos;V&apos; to switch view
+            </p>
+          </div>
+        </div>
+
+        {/* Leva Controls */}
+        <div className="pointer-events-auto w-72 backdrop-blur-sm rounded-lg overflow-hidden">
+          <Leva fill />
         </div>
       </div>
     </div>
