@@ -147,19 +147,12 @@ export default function Flock({ count, config }: FlockProps) {
       // Apply rotation to dummy
       dummy.quaternion.copy(currentQuat);
       
-      // Adjust geometry orientation (Cone is Y-up, we are looking Z-forward)
-      // The original Code did dummy.rotateY(Math.PI). Let's check geometry again.
-      // Geometry: Cone rotated X -90. So default tip points +Z?
-      // If we lookAt, +Z points to target.
-      // If original needed RotateY(PI), maybe the model was backward. 
-      // Let's keep consistent with original coordinate system if possible, OR fix it here.
-      // If geometry points -Z or something.
-      // Original: geo.rotateX(-Math.PI/2) -> Tip points +Z (up turned forward).
-      // Original loop: lookAt(target), rotateY(PI).
-      // lookAt aligns +Z to target. rotateY(PI) flips it to -Z.
-      // This implies the geometry might be pointing backwards or they wanted it that way?
-      // Let's assume we need to correct the mesh orientation relative to the calculated "Forward" quaternion.
-      dummy.rotateY(Math.PI); 
+      // Geometric Correction:
+      // The ConeGeometry is created with rotateX(-Math.PI/2), so its tip points to +Z.
+      // lookAt aligns +Z to the target direction.
+      // Therefore, the tip (Head) points to direction.
+      // We do NOT need to rotate Y by PI. Removing the flip.
+      // dummy.rotateY(Math.PI); 
 
       dummy.updateMatrix();
       
@@ -173,8 +166,8 @@ export default function Flock({ count, config }: FlockProps) {
       const flapAngle = Math.sin(time * flapSpeed + flapPhase) * 0.35; // +/- 0.35 radians
 
       // Left Wing
-      wingDummy.copy(dummy); // Start with body transform
-      wingDummy.rotateZ(flapAngle); // Flap up/down
+      wingDummy.copy(dummy); // Start with body transform (including banking)
+      wingDummy.rotateZ(flapAngle); // Flap relative to body
       wingDummy.updateMatrix();
       leftWingMeshRef.current.setMatrixAt(i, wingDummy.matrix);
 
