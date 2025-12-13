@@ -18,25 +18,39 @@ export default function CameraController() {
     }
   }, [cameraMode]);
 
+  // Refs for smoothing to create "steady cam" feel
+  const currentVelocityRef = useRef(new THREE.Vector3(0, 0, 1));
+  const lookAtTargetRef = useRef(new THREE.Vector3());
+
   useFrame((state, delta) => {
     if (cameraMode === 'bird') {
-      // Calculate ideal position: behind and slightly above the bird
-      // We need a stable "behind" vector. Using velocity is good but can be jittery if velocity changes direction fast.
-      // For smoothing, we use lerp.
+      // 1. Get raw velocity and position
+      const rawVelocity = targetBirdVelocity.clone();
+      if (rawVelocity.lengthSq() < 0.1) rawVelocity.set(0, 0, 1);
       
-      const velocity = targetBirdVelocity.clone();
-      if (velocity.lengthSq() < 0.1) velocity.set(0, 0, 1); // Fallback
-      
-      const direction = velocity.normalize();
-      const offset = direction.clone().multiplyScalar(-8).add(new THREE.Vector3(0, 3, 0));
+      // 2. Smooth the velocity vector to prevent jittery camera placement
+      // This acts as a low-pass filter on the bird's direction changes
+      currentVelocityRef.current.lerp(rawVelocity, 0.05);
+      const smoothedDirection = currentVelocityRef.current.clone().normalize();
+
+      // 3. Calculate ideal position: behind and above, based on SMOOTHED direction
+      const offset = smoothedDirection.clone().multiplyScalar(-10).add(new THREE.Vector3(0, 4, 0));
       const desiredPosition = targetBirdPosition.clone().add(offset);
       
-      // Smoothly move camera
-      state.camera.position.lerp(desiredPosition, 0.05);
+      // 4. Smoothly move camera to desired position
+      state.camera.position.lerp(desiredPosition, 0.1);
       
-      // Look at the bird (or slightly ahead)
-      const lookAtTarget = targetBirdPosition.clone().add(direction.multiplyScalar(5));
-      state.camera.lookAt(lookAtTarget);
+      // 5. Calculate and smooth the "Look At" target
+      // Look slightly ahead of the bird to anticipate movement
+      const desiredLookAt = targetBirdPosition.clone().add(smoothedDirection.multiplyScalar(10));
+      
+      // Initialize lookAtRef if it's far off (e.g. first frame)
+      if (lookAtTargetRef.current.distanceTo(desiredLookAt) > 100) {
+        lookAtTargetRef.current.copy(desiredLookAt);
+      }
+      
+      lookAtTargetRef.current.lerp(desiredLookAt, 0.05);
+      state.camera.lookAt(lookAtTargetRef.current);
     }
   });
 
