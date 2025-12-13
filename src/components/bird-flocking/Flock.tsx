@@ -17,6 +17,9 @@ export default function Flock({ count, config }: FlockProps) {
   const leftWingMeshRef = useRef<THREE.InstancedMesh>(null);
   const rightWingMeshRef = useRef<THREE.InstancedMesh>(null);
   
+  // Store previous rotations for smoothing
+  const quaternionsRef = useRef<THREE.Quaternion[]>([]);
+  
   const system = useMemo(() => new FlockingSystem(count, config), [count, config]);
 
   // Update system config when props change
@@ -72,11 +75,14 @@ export default function Flock({ count, config }: FlockProps) {
     flatShading: true
   }), []);
 
-  // Re-init system
+  // Re-init system and quaternions
   useEffect(() => {
-    if (system.count !== count) {
+    if (system.count !== count || quaternionsRef.current.length !== count) {
       system.count = count;
       system.initBoids();
+      
+      // Initialize quaternions
+      quaternionsRef.current = new Array(count).fill(null).map(() => new THREE.Quaternion());
     }
   }, [count, system]);
 
@@ -104,9 +110,57 @@ export default function Flock({ count, config }: FlockProps) {
       const boid = system.boids[i];
       
       dummy.position.copy(boid.position);
-      const target = boid.position.clone().add(boid.velocity);
-      dummy.lookAt(target);
-      dummy.rotateY(Math.PI);
+
+      // Smooth Rotation Logic
+      // 1. Calculate target rotation based on velocity (where we are going)
+      const velocity = boid.velocity.clone();
+      if (velocity.lengthSq() < 0.1) velocity.set(0, 0, 1);
+      
+      // 2. Calculate Banking (Roll)
+      // Birds bank into turns. We use acceleration to determine the turn.
+      // Project acceleration onto the "right" vector to get sideways force
+      const globalUp = new THREE.Vector3(0, 1, 0);
+      const lookDir = velocity.clone().normalize();
+      const rightDir = new THREE.Vector3().crossVectors(lookDir, globalUp).normalize();
+      
+      // Calculate banking intensity from sideways acceleration
+      // A negative dot product means accelerating left -> bank left
+      const sideAccel = boid.acceleration.dot(rightDir);
+      const bankAngle = -sideAccel * 3.0; // Multiplier for visual banking effect
+      
+      // 3. Create Target Rotation
+      // We construct a matrix that looks at direction, but with a tilted up vector
+      // Rotate the global UP vector around the Forward axis by the bank angle
+      const bankedUp = globalUp.clone().applyAxisAngle(lookDir, bankAngle);
+      
+      const targetRotation = new THREE.Quaternion();
+      const lookMatrix = new THREE.Matrix4().lookAt(dummy.position, dummy.position.clone().add(velocity), bankedUp);
+      targetRotation.setFromRotationMatrix(lookMatrix);
+      
+      // 4. Smoothly interpolate current rotation to target
+      if (!quaternionsRef.current[i]) quaternionsRef.current[i] = new THREE.Quaternion();
+      const currentQuat = quaternionsRef.current[i];
+      
+      // Slerp factor (0.1 = smooth, 1.0 = instant). Lower is smoother but laggier.
+      currentQuat.slerp(targetRotation, 0.1);
+      
+      // Apply rotation to dummy
+      dummy.quaternion.copy(currentQuat);
+      
+      // Adjust geometry orientation (Cone is Y-up, we are looking Z-forward)
+      // The original Code did dummy.rotateY(Math.PI). Let's check geometry again.
+      // Geometry: Cone rotated X -90. So default tip points +Z?
+      // If we lookAt, +Z points to target.
+      // If original needed RotateY(PI), maybe the model was backward. 
+      // Let's keep consistent with original coordinate system if possible, OR fix it here.
+      // If geometry points -Z or something.
+      // Original: geo.rotateX(-Math.PI/2) -> Tip points +Z (up turned forward).
+      // Original loop: lookAt(target), rotateY(PI).
+      // lookAt aligns +Z to target. rotateY(PI) flips it to -Z.
+      // This implies the geometry might be pointing backwards or they wanted it that way?
+      // Let's assume we need to correct the mesh orientation relative to the calculated "Forward" quaternion.
+      dummy.rotateY(Math.PI); 
+
       dummy.updateMatrix();
       
       bodyMeshRef.current.setMatrixAt(i, dummy.matrix);
